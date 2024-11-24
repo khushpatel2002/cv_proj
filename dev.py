@@ -196,26 +196,40 @@ class PathPlanner:
         return neighbors
 
     def find_path(self, start: Tuple[float, float], goal: Tuple[float, float]) -> List[Tuple[float, float]]:
-        """A* pathfinding with improved wall avoidance"""
+        """A* pathfinding with improved wall avoidance and alternative path finding"""
         start = (int(start[0]), int(start[1]))
         goal = (int(goal[0]), int(goal[1]))
         
+        # If goal is unreachable, try to find nearest accessible point
         if self.env.check_collision(*goal):
-            # If goal is in wall, find nearest free space
+            logging.debug(f"Original goal {goal} is in collision, searching for alternative")
+            best_alt = None
             min_dist = float('inf')
-            new_goal = None
-            for x in range(max(0, goal[0]-3), min(GRID_SIZE, goal[0]+4)):
-                for y in range(max(0, goal[1]-3), min(GRID_SIZE, goal[1]+4)):
-                    if not self.env.check_collision(x, y):
-                        dist = abs(x - goal[0]) + abs(y - goal[1])
-                        if dist < min_dist:
-                            min_dist = dist
-                            new_goal = (x, y)
-            if new_goal:
-                goal = new_goal
-            else:
+            search_radius = 5  # Increased search radius
+            
+            # Search in expanding squares around the goal
+            for radius in range(1, search_radius + 1):
+                for dx in range(-radius, radius + 1):
+                    for dy in range(-radius, radius + 1):
+                        if abs(dx) == radius or abs(dy) == radius:  # Only check the perimeter
+                            alt_x, alt_y = goal[0] + dx, goal[1] + dy
+                            if (0 <= alt_x < GRID_SIZE and 0 <= alt_y < GRID_SIZE and 
+                                not self.env.check_collision(alt_x, alt_y)):
+                                dist = abs(alt_x - goal[0]) + abs(alt_y - goal[1])
+                                if dist < min_dist:
+                                    min_dist = dist
+                                    best_alt = (alt_x, alt_y)
+                
+                if best_alt:  # If found a valid point, use it
+                    logging.debug(f"Found alternative goal at {best_alt}")
+                    goal = best_alt
+                    break
+            
+            if not best_alt:
+                logging.warning(f"No accessible point found near goal {goal}")
                 return []
 
+        # Standard A* implementation
         frontier = []
         heapq.heappush(frontier, (0, start))
         came_from = {start: None}
@@ -228,7 +242,6 @@ class PathPlanner:
                 break
                 
             for next_pos in self.get_neighbors(current):
-                # Calculate movement cost (diagonal movement costs more)
                 dx = abs(next_pos[0] - current[0])
                 dy = abs(next_pos[1] - current[1])
                 movement_cost = 1.4 if dx + dy == 2 else 1.0
@@ -241,8 +254,8 @@ class PathPlanner:
                     heapq.heappush(frontier, (priority, next_pos))
                     came_from[next_pos] = current
         
-        # Reconstruct path
         if goal not in came_from:
+            logging.warning(f"No path found to goal {goal}")
             return []
             
         path = []
@@ -452,6 +465,7 @@ def main():
     env = Environment("custom_environment.json" if len(sys.argv) > 1 else None)
     auto_mode = False
     current_poi_index = 0
+    visited_pois = set()  # Keep track of visited POIs
     movement_patterns = [MovementPattern.DIRECT, MovementPattern.CIRCULAR, MovementPattern.SMOOTH_APPROACH]
     current_pattern = 0
     
@@ -469,8 +483,20 @@ def main():
         
         if auto_mode and env.camera.path:
             if env.camera.move_along_path(env):
+                visited_pois.add(current_poi_index)
                 logging.debug(f"Reached POI at index: {current_poi_index}")
-                current_poi_index = (current_poi_index + 1) % len(env.points_of_interest)
+                
+                # Find next unvisited POI
+                original_index = current_poi_index
+                while True:
+                    current_poi_index = (current_poi_index + 1) % len(env.points_of_interest)
+                    if current_poi_index not in visited_pois or current_poi_index == original_index:
+                        break
+                
+                if len(visited_pois) == len(env.points_of_interest):
+                    logging.info("All POIs have been visited!")
+                    visited_pois.clear()  # Reset for next round
+                
                 next_poi = env.points_of_interest[current_poi_index]
                 logging.debug(f"Next POI: {next_poi}")
                 path = env.path_planner.find_path((env.camera.x, env.camera.y), 
@@ -481,6 +507,8 @@ def main():
                     env.camera.set_target((next_poi.x, next_poi.y), path)
                 else:
                     logging.warning(f"No path found to POI at index: {current_poi_index}")
+                    # Skip to next POI if current is unreachable
+                    current_poi_index = (current_poi_index + 1) % len(env.points_of_interest)
         
         key = cv2.waitKey(50)
         if key == 27:  # ESC
