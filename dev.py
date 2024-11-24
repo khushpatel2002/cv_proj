@@ -6,6 +6,10 @@ from dataclasses import dataclass
 from typing import List, Tuple, Optional
 import json
 import sys
+import logging
+
+# Setup logging
+logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 
 # Constants
 GRID_SIZE = 40
@@ -465,12 +469,18 @@ def main():
         
         if auto_mode and env.camera.path:
             if env.camera.move_along_path(env):
+                logging.debug(f"Reached POI at index: {current_poi_index}")
                 current_poi_index = (current_poi_index + 1) % len(env.points_of_interest)
                 next_poi = env.points_of_interest[current_poi_index]
+                logging.debug(f"Next POI: {next_poi}")
                 path = env.path_planner.find_path((env.camera.x, env.camera.y), 
                                                 (next_poi.x, next_poi.y))
-                env.camera.movement_pattern = movement_patterns[current_pattern]
-                env.camera.set_target((next_poi.x, next_poi.y), path)
+                if path:
+                    logging.debug(f"Path found to POI: {path}")
+                    env.camera.movement_pattern = movement_patterns[current_pattern]
+                    env.camera.set_target((next_poi.x, next_poi.y), path)
+                else:
+                    logging.warning(f"No path found to POI at index: {current_poi_index}")
         
         key = cv2.waitKey(50)
         if key == 27:  # ESC
@@ -489,12 +499,18 @@ def main():
             env.camera.angle -= ROTATION_SPEED
         elif key == ord('p'):
             auto_mode = not auto_mode
+            logging.info(f"Automatic mode {'enabled' if auto_mode else 'disabled'}.")
             if auto_mode:
                 next_poi = env.points_of_interest[current_poi_index]
+                logging.debug(f"Starting auto mode with POI: {next_poi}")
                 path = env.path_planner.find_path((env.camera.x, env.camera.y), 
                                                 (next_poi.x, next_poi.y))
-                env.camera.movement_pattern = movement_patterns[current_pattern]
-                env.camera.set_target((next_poi.x, next_poi.y), path)
+                if path:
+                    logging.debug(f"Initial path found to POI: {path}")
+                    env.camera.movement_pattern = movement_patterns[current_pattern]
+                    env.camera.set_target((next_poi.x, next_poi.y), path)
+                else:
+                    logging.warning(f"No initial path found to POI at index: {current_poi_index}")
         elif key == ord('m'):
             current_pattern = (current_pattern + 1) % len(movement_patterns)
             if env.camera.path:
