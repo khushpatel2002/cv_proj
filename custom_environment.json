@@ -1,0 +1,16 @@
+{
+    "walls": [
+        {"type": "vertical", "x": 10, "y": 10, "length": 15},
+        {"type": "horizontal", "x": 10, "y": 10, "length": 15},
+        {"type": "rectangle", "x": 25, "y": 25, "width": 8, "height": 8},
+        {"type": "vertical", "x": 30, "y": 5, "length": 10}
+    ],
+    "points_of_interest": [
+        {"x": 5, "y": 5, "importance": 1.0},
+        {"x": 35, "y": 35, "importance": 0.9},
+        {"x": 5, "y": 35, "importance": 0.8},
+        {"x": 35, "y": 5, "importance": 0.7},
+        {"x": 20, "y": 20, "importance": 0.6}
+    ],
+    "start_position": {"x": 15, "y": 15, "angle": 0}
+}
