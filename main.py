@@ -316,7 +316,8 @@ class Environment:
         
         # Initialize camera with config
         start_pos = self.config["start_position"]
-        self.camera = Camera(start_pos["x"], start_pos["y"], start_pos["angle"], CAMERA_FOV)
+        start_angle = start_pos.get("orientation", start_pos.get("angle", 0))  # Handle both orientation and angle
+        self.camera = Camera(start_pos["x"], start_pos["y"], start_angle, CAMERA_FOV)
         
         self.path_planner = PathPlanner(self)
         self.setup_environment()
@@ -332,18 +333,36 @@ class Environment:
         # Create walls from configuration
         for wall in self.config["walls"]:
             if wall["type"] == "vertical":
-                self.grid[wall["x"]:wall["x"]+wall["length"], wall["y"]] = 1
+                x, y = int(wall["x"]), int(wall["y"])
+                length = int(wall["length"])
+                # Ensure coordinates are within grid bounds
+                if 0 <= x < GRID_SIZE and 0 <= y < GRID_SIZE:
+                    end_y = min(y + length, GRID_SIZE)
+                    self.grid[x, y:end_y] = 1
             elif wall["type"] == "horizontal":
-                self.grid[wall["x"], wall["y"]:wall["y"]+wall["length"]] = 1
+                x, y = int(wall["x"]), int(wall["y"])
+                length = int(wall["length"])
+                # Ensure coordinates are within grid bounds
+                if 0 <= x < GRID_SIZE and 0 <= y < GRID_SIZE:
+                    end_x = min(x + length, GRID_SIZE)
+                    self.grid[x:end_x, y] = 1
             elif wall["type"] == "rectangle":
-                self.grid[wall["x"]:wall["x"]+wall["width"], 
-                         wall["y"]:wall["y"]+wall["height"]] = 1
+                x, y = int(wall["x"]), int(wall["y"])
+                width, height = int(wall["width"]), int(wall["height"])
+                # Ensure coordinates are within grid bounds
+                if 0 <= x < GRID_SIZE and 0 <= y < GRID_SIZE:
+                    end_x = min(x + width, GRID_SIZE)
+                    end_y = min(y + height, GRID_SIZE)
+                    self.grid[x:end_x, y:end_y] = 1
 
-        # Setup points of interest
-        self.points_of_interest = [
-            PointOfInterest(poi["x"], poi["y"], poi["importance"])
-            for poi in self.config["points_of_interest"]
-        ]
+        # Setup points of interest with bounds checking
+        self.points_of_interest = []
+        for poi in self.config["points_of_interest"]:
+            x, y = int(poi["x"]), int(poi["y"])
+            if 0 <= x < GRID_SIZE and 0 <= y < GRID_SIZE:
+                self.points_of_interest.append(
+                    PointOfInterest(x, y, poi["importance"])
+                )
         # Sort by importance
         self.points_of_interest.sort(key=lambda x: x.importance, reverse=True)
 
@@ -462,7 +481,7 @@ class PointOfInterest:
 
 def main():
     # You can specify a config file or use default configuration
-    env = Environment("custom_environment.json" if len(sys.argv) > 1 else None)
+    env = Environment("/Users/khushpatel2002/cv_proj/custom_environment.json" if len(sys.argv) > 1 else None)
     auto_mode = False
     current_poi_index = 0
     visited_pois = set()  # Keep track of visited POIs
